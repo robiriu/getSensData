@@ -27,9 +27,7 @@ getSensData is a web application designed to collect, display, and visualize med
  4. Run the application:
     ```sh
     node server.js
- 5.. Open the application: Open your browser and navigate to
-    ```sh
-    http://localhost:3000
+ 5. Open the application: Open your browser and navigate to http://localhost:3000
 
 ## Usage
 - Fill out the form with your name, age, height, and weight.
