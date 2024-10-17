@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedData Challenge</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center; 
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            gap: 20px;
+        }
+        .form-container, .visualization-container {
+            width: 48%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            background-color: #fff;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .visualization-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        form {
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .sensor-data {
+            display: block;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .status {
+            font-size: 0.9em;
+            color: #888;
+            margin-top: 4px; 
+        }
+        .sensor-section {
+            margin-bottom: 20px; 
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #clearButton {
+            background-color: #dc3545;
+        }
+        #clearButton:hover {
+            background-color: #c82333;
+        }
+        #submittedData {
+            max-width: 100%;
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            overflow-y: auto; 
+            max-height: 400px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
+</head>
+<body>
+    <h1>MedData Challenge</h1>
+    <div class="container">
+        <div class="form-container">
+            <form id="dataForm">
+                <label for="name">Nama:</label>
+                <input type="text" id="name" name="name" required><br>
+                <label for="age">Umur:</label>
+                <input type="number" id="age" name="age" required><br>
+                <label for="height">Tinggi Badan (cm):</label>
+                <input type="number" id="height" name="height" required><br>
+                <label for="weight">Berat Badan (kg):</label>
+                <input type="number" id="weight" name="weight" required><br>
+                <!-- New spans for sensor data with adjusted spacing -->
+                <div class="sensor-section">
+                    <label>Saturasi Oksigen (%):</label>
+                    <span id="oxygen" class="sensor-data">N/A</span>
+                    <span id="oxygenStatus" class="status">Data not received</span>
+                </div>
+                <div class="sensor-section">
+                    <label>Heart Rate (bpm):</label>
+                    <span id="heartRate" class="sensor-data">N/A</span>
+                    <span id="heartRateStatus" class="status">Data not received</span>
+                </div>
+                <button type="submit">Submit</button>
+                <button type="button" id="clearButton">Clear Data</button>
+            </form>
+        </div>
+        <div class="visualization-container">
+            <h2>Data Visualization</h2>
+            <canvas id="oxygenChart"></canvas>
+            <canvas id="heartRateChart"></canvas>
+        </div>
+    </div>
+    <div id="submittedData">
+        <h2>Submitted Data</h2>
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Nama</th>
+                    <th>Umur</th>
+                    <th>Tinggi Badan (cm)</th>
+                    <th>Berat Badan (kg)</th>
+                    <th>Saturasi Oksigen (%)</th>
+                    <th>Heart Rate (bpm)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let myChartOxygen;
+        let myChartHeartRate;
+    
+        document.getElementById('dataForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = {
+                name: document.getElementById('name').value,
+                age: document.getElementById('age').value,
+                height: document.getElementById('height').value,
+                weight: document.getElementById('weight').value,
+                oxygen: document.getElementById('oxygen').textContent === 'N/A' ? null : parseFloat(document.getElementById('oxygen').textContent),
+                heartRate: document.getElementById('heartRate').textContent === 'N/A' ? null : parseFloat(document.getElementById('heartRate').textContent)
+            };
+            console.log('Form Data:', formData);
+    
+            fetch('http://localhost:3000/addData', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log('Server Response:', data);
+                displayData(formData);
+                setTimeout(clearForm, 2000);  
+                setTimeout(updateVisualization, 2000);
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    
+        document.getElementById('clearButton').addEventListener('click', function() {
+            fetch('http://localhost:3000/clearData', {
+                method: 'DELETE'
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log('Clear Data Response:', data);
+                clearTable();
+                clearForm();
+                updateVisualization();
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    
+        function displayData(data) {
+            const dataTable = document.querySelector('#dataTable tbody');
+            const newRow = dataTable.insertRow();
+            newRow.innerHTML = `
+                <td>${data.name}</td>
+                <td>${data.age}</td>
+                <td>${data.height}</td>
+                <td>${data.weight}</td>
+                <td>${data.oxygen !== null ? data.oxygen : 'N/A'}</td>
+                <td>${data.heartRate !== null ? data.heartRate : 'N/A'}</td>
+            `;
+            console.log('Data Displayed:', data);
+        }
+    
+        function clearTable() {
+            const dataTable = document.querySelector('#dataTable tbody');
+            dataTable.innerHTML = ''; 
+        }
+    
+        function clearForm() {
+            document.getElementById('dataForm').reset();
+            document.getElementById('oxygen').innerText = 'N/A'; 
+            document.getElementById('oxygenStatus').innerText = 'Data not received'; 
+            document.getElementById('heartRate').innerText = 'N/A'; 
+            document.getElementById('heartRateStatus').innerText = 'Data not received'; 
+        }
+    
+        function updateVisualization() {
+            fetch('http://localhost:3000/getData')
+            .then(response => response.json())
+            .then(data => {
+                const ctxOxygen = document.getElementById('oxygenChart').getContext('2d');
+                const ctxHeartRate = document.getElementById('heartRateChart').getContext('2d');
+    
+                const names = data.map(item => item.name);
+                const oxygenData = data.map(item => item.oxygen);
+                const heartRateData = data.map(item => item.heartRate);
+    
+                if (myChartOxygen) {
+                    myChartOxygen.destroy();
+                }
+    
+                if (myChartHeartRate) {
+                    myChartHeartRate.destroy();
+                }
+    
+                myChartOxygen = new Chart(ctxOxygen, {
+                    type: 'bar',
+                    data: {
+                        labels: names,
+                        datasets: [{
+                            label: 'Oxygen Percentage (%)',
+                            data: data.map(item => ({ x: item.name, y: item.oxygen })),
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                type: 'category',
+                                labels: names,
+                                title: {
+                                    display: true,
+                                    text: 'Name'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Oxygen Percentage (%)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            annotation: {
+                                annotations: {
+                                    line1: {
+                                        type: 'line',
+                                        yMin: 85,
+                                        yMax: 85,
+                                        borderColor: 'red',
+                                        borderWidth: 2,
+                                        label: {
+                                            content: '85%',
+                                            enabled: true,
+                                            position: 'end'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+    
+                myChartHeartRate = new Chart(ctxHeartRate, {
+                    type: 'bar',
+                    data: {
+                        labels: names,
+                        datasets: [{
+                            label: 'Heart Rate (bpm)',
+                            data: data.map(item => ({ x: item.name, y: item.heartRate })),
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                type: 'category',
+                                labels: names,
+                                title: {
+                                    display: true,
+                                    text: 'Name'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Heart Rate (bpm)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            annotation: {
+                                annotations: {
+                                    line1: {
+                                        type: 'line',
+                                        yMin: 60,
+                                        yMax: 60,
+                                        borderColor: 'red',
+                                        borderWidth: 2,
+                                        label: {
+                                            content: '60 bpm',
+                                            enabled: true,
+                                            position: 'end'
+                                        }
+                                    },
+                                    line2: {
+                                        type: 'line',
+                                        yMin: 100,
+                                        yMax: 100,
+                                        borderColor: 'red',
+                                        borderWidth: 2,
+                                        label: {
+                                            content: '100 bpm',
+                                            enabled: true,
+                                            position: 'end'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    
+        // Initial load of the visualization
+        window.onload = function() {
+            updateVisualization();
+        };
+    
+        async function fetchData() {
+            try {
+                const response = await fetch('http://localhost:3000/getData');
+                const data = await response.json();
+                const latestData = data[data.length - 1];
+    
+                document.getElementById('oxygen').innerText = latestData.oxygen !== null ? `${latestData.oxygen}%` : 'N/A';
+                document.getElementById('oxygenStatus').innerText = latestData.oxygen !== null ? 'Data received' : 'Data not received';
+    
+                document.getElementById('heartRate').innerText = latestData.heartRate !== null ? `${latestData.heartRate} bpm` : 'N/A';
+                document.getElementById('heartRateStatus').innerText = latestData.heartRate !== null ? 'Data received' : 'Data not received';
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+        setInterval(fetchData, 5000); 
+    </script>
+</body>
+</html>
